@@ -86,11 +86,13 @@ function visiblePrompts() {
 
 function cardHTML(prompt, pendingIds) {
   const tags = (prompt.tags || []).slice(0, 3).map(tag => `<span class="tag">#${escapeHTML(tag)}</span>`).join('');
+  const attachments = (prompt.attachments || []).map(a => `<button type="button" class="attachment-chip" data-action="download-attachment" data-attachment="${a.id}" data-name="${escapeHTML(a.name)}" title="Baixar ${escapeHTML(a.name)}">📎 ${escapeHTML(a.name)}</button>`).join('');
   return `<article class="prompt-card ${prompt.pinned ? 'pinned' : ''}" data-id="${prompt.id}">
     <div class="card-head"><span class="category-badge">${escapeHTML(prompt.category || 'Geral')}</span>
       <button class="favorite-button ${prompt.favorite ? 'active' : ''}" data-action="favorite" title="Favorito">${prompt.favorite ? '♥' : '♡'}</button></div>
     <h2>${escapeHTML(prompt.title)}${prompt.attachmentCount ? `<small class="attachment-count" title="${prompt.attachmentCount} anexo(s)"> · 📎 ${prompt.attachmentCount}</small>` : ''}</h2><p class="prompt-preview">${escapeHTML(prompt.content)}</p>
     <div class="tag-list">${tags}</div>
+    ${attachments ? `<div class="attachment-list">${attachments}</div>` : ''}
     <footer class="card-footer"><span class="card-date">Atualizado ${formatDate(prompt.updatedAt)}</span>
       <div class="card-actions">
         <button data-action="copy" title="Copiar prompt">⧉</button><button data-action="export" title="Exportar com anexos">⇩</button>
@@ -279,9 +281,31 @@ async function loadEditorFiles(promptId) {
     } catch { /* Os anexos pendentes continuam disponíveis localmente. */ }
   }
   $('#file-list').innerHTML = [
-    ...localFiles.map(f => `<span class="file-chip">↻ ${escapeHTML(f.name)} · envio pendente</span>`),
-    ...serverFiles.map(f => `<button type="button" class="file-chip file-download" data-attachment="${f.id}" data-name="${escapeHTML(f.name)}">⇩ ${escapeHTML(f.name)}</button>`),
+    ...localFiles.map(f => `<span class="file-chip">↻ ${escapeHTML(f.name)} · envio pendente<button type="button" class="file-remove" data-remove-local="${f.id}" title="Remover anexo">×</button></span>`),
+    ...serverFiles.map(f => `<span class="file-chip"><button type="button" class="file-download" data-attachment="${f.id}" data-name="${escapeHTML(f.name)}">⇩ ${escapeHTML(f.name)}</button><button type="button" class="file-remove" data-remove-server="${f.id}" title="Remover anexo">×</button></span>`),
   ].join('');
+}
+
+async function removeLocalFile(id) {
+  await localDB.delete('files', id);
+  await loadEditorFiles($('#prompt-id').value);
+  toast('Anexo removido.');
+}
+
+async function removeServerAttachment(id) {
+  if (!confirm('Remover este anexo definitivamente?')) return;
+  const response = await apiFetch(`/api/attachments/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  if (!response.ok) { toast('Não foi possível remover o anexo.', 'error'); return; }
+  const promptId = $('#prompt-id').value;
+  const prompt = state.prompts.find(p => p.id === promptId);
+  if (prompt) {
+    prompt.attachmentCount = Math.max(0, Number(prompt.attachmentCount || 0) - 1);
+    prompt.attachments = (prompt.attachments || []).filter(a => a.id !== id);
+    await localDB.put('prompts', prompt);
+    await loadLocal(); await render();
+  }
+  await loadEditorFiles(promptId);
+  toast('Anexo removido.');
 }
 
 async function downloadAttachment(id, name) {
@@ -489,7 +513,14 @@ function bindEvents() {
   $('#offline-entry').addEventListener('click', showApp);
   $('#new-button').addEventListener('click', () => openEditor());
   $('#empty-state').addEventListener('click', e => { if (e.target.closest('[data-action=new]')) openEditor(); });
-  $('#prompt-grid').addEventListener('click', event => { const button = event.target.closest('[data-action]'); if (button) mutateCard(button.closest('.prompt-card').dataset.id, button.dataset.action); });
+  $('#prompt-grid').addEventListener('click', event => {
+    const card = event.target.closest('.prompt-card');
+    if (!card) return;
+    const button = event.target.closest('[data-action]');
+    if (!button) { mutateCard(card.dataset.id, 'copy'); return; }
+    if (button.dataset.action === 'download-attachment') { downloadAttachment(button.dataset.attachment, button.dataset.name); return; }
+    mutateCard(card.dataset.id, button.dataset.action);
+  });
   $('.nav').addEventListener('click', event => { const b = event.target.closest('[data-view]'); if (!b) return; state.view = b.dataset.view; state.category = ''; render(); });
   $('#category-list').addEventListener('click', event => { const b = event.target.closest('[data-category]'); if (!b) return; state.category = b.dataset.category; state.view = 'all'; closeSidebar(); render(); });
   $('#mobile-filters').addEventListener('click', event => { const b = event.target.closest('button'); if (!b) return; state.category = b.dataset.mobileCategory || ''; state.view = b.dataset.mobileView || 'all'; render(); });
@@ -502,7 +533,14 @@ function bindEvents() {
     state.editorTimer = setTimeout(() => saveEditor(false), 850);
   });
   $('#prompt-files').addEventListener('change', event => { $('#file-list').innerHTML = [...event.target.files].map(f => `<span class="file-chip">${escapeHTML(f.name)} · ${Math.ceil(f.size / 1024)} KB</span>`).join(''); });
-  $('#file-list').addEventListener('click', event => { const button = event.target.closest('[data-attachment]'); if (button) downloadAttachment(button.dataset.attachment, button.dataset.name); });
+  $('#file-list').addEventListener('click', event => {
+    const removeLocal = event.target.closest('[data-remove-local]');
+    if (removeLocal) { removeLocalFile(removeLocal.dataset.removeLocal); return; }
+    const removeServer = event.target.closest('[data-remove-server]');
+    if (removeServer) { removeServerAttachment(removeServer.dataset.removeServer); return; }
+    const button = event.target.closest('[data-attachment]');
+    if (button) downloadAttachment(button.dataset.attachment, button.dataset.name);
+  });
   $('#sync-button').addEventListener('click', syncNow); $('#settings-sync').addEventListener('click', syncNow);
   $('#theme-button').addEventListener('click', () => { const value = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = value; localStorage.setItem('pm_theme', value); });
   $('#export-button').addEventListener('click', () => exportJSON()); $('#settings-export').addEventListener('click', () => exportJSON());

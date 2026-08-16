@@ -63,12 +63,15 @@ function rowToPrompt(row: Record<string, unknown>) {
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at || null,
     attachmentCount: Number(row.attachment_count || 0),
+    attachments: JSON.parse(String(row.attachments_json || "[]")),
   };
 }
 
+const ATTACHMENTS_SUBQUERY = `(SELECT COUNT(*) FROM attachments a WHERE a.prompt_id=p.id AND a.deleted_at IS NULL) AS attachment_count,
+    (SELECT json_group_array(json_object('id', a2.id, 'name', a2.name)) FROM attachments a2 WHERE a2.prompt_id=p.id AND a2.deleted_at IS NULL) AS attachments_json`;
+
 async function getPrompt(env: Env, id: string) {
-  return env.DB.prepare(`SELECT p.*,
-    (SELECT COUNT(*) FROM attachments a WHERE a.prompt_id=p.id AND a.deleted_at IS NULL) AS attachment_count
+  return env.DB.prepare(`SELECT p.*, ${ATTACHMENTS_SUBQUERY}
     FROM prompts p WHERE p.id = ?`).bind(id).first<Record<string, unknown>>();
 }
 
@@ -124,8 +127,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
 
   if (path === "/api/prompts" && request.method === "GET") {
     const since = url.searchParams.get("since");
-    const base = `SELECT p.*,
-      (SELECT COUNT(*) FROM attachments a WHERE a.prompt_id=p.id AND a.deleted_at IS NULL) AS attachment_count
+    const base = `SELECT p.*, ${ATTACHMENTS_SUBQUERY}
       FROM prompts p`;
     const query = since
       ? env.DB.prepare(`${base} WHERE p.updated_at > ? OR p.deleted_at > ? ORDER BY p.updated_at DESC`).bind(since, since)
@@ -231,6 +233,18 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     if (!object) return json({ error: "Arquivo não encontrado." }, 404, headers);
     return new Response(object.body, { headers: { ...headers, "content-type": String(item.content_type),
       "content-disposition": `attachment; filename="${String(item.name).replace(/"/g, "")}"` } });
+  }
+
+  if (attachmentMatch && request.method === "DELETE") {
+    const id = decodeURIComponent(attachmentMatch[1]);
+    const item = await env.DB.prepare("SELECT * FROM attachments WHERE id=? AND deleted_at IS NULL")
+      .bind(id).first<Record<string, unknown>>();
+    if (!item) return json({ error: "Anexo não encontrado." }, 404, headers);
+    const now = new Date().toISOString();
+    await env.DB.prepare("UPDATE attachments SET deleted_at=? WHERE id=?").bind(now, id).run();
+    await env.ATTACHMENTS.delete(String(item.r2_key));
+    await env.DB.prepare("UPDATE prompts SET updated_at=? WHERE id=?").bind(now, String(item.prompt_id)).run();
+    return json({ ok: true, id, promptId: item.prompt_id }, 200, headers);
   }
 
   return json({ error: "Rota não encontrada." }, 404, headers);

@@ -1,4 +1,4 @@
-const CACHE = 'prompt-master-shell-v2';
+const CACHE = 'prompt-master-shell-v3';
 const SHELL = ['./', './index.html', './styles.css', './app.js', './db.js', './manifest.webmanifest', './icons/icon.svg'];
 
 self.addEventListener('install', event => {
