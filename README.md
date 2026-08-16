@@ -249,6 +249,8 @@ Cada prompt possui uma versão. Se um computador editar a versão 4 enquanto o c
 
 # Botão Copiar
 
+Clicar em **qualquer área do card** (título, prévia do prompt, tags, rodapé) copia o prompt — não é preciso acertar o ícone `⧉`. Cliques nos botões de ação (favoritar, editar, arquivar, excluir etc.) e nos anexos listados no card continuam executando a própria ação, sem disparar a cópia.
+
 ## Prompt sem anexos
 
 O botão copia somente o texto principal, pronto para colar no ChatGPT, Claude, Gemini ou outra IA.
@@ -294,6 +296,13 @@ Binários usam Data URL:
 
 Para copiar anexos que já estão no R2, o dispositivo precisa estar conectado. Se não estiver, o PWA avisa que precisa da internet para produzir uma cópia completa.
 
+# Anexos no card e na edição
+
+- O card principal mostra cada anexo já sincronizado como um "chip" com o nome do arquivo, logo abaixo das tags. Clicar em um chip de anexo baixa **somente aquele arquivo** — não copia o prompt e não abre o editor.
+- Na tela de edição, cada anexo (pendente de envio ou já salvo no servidor) tem um botão **×** ao lado para remoção rápida:
+  - anexos ainda não sincronizados são removidos apenas do dispositivo (IndexedDB);
+  - anexos já salvos no servidor são removidos via `DELETE /api/attachments/:id`, que apaga o registro no D1 e o arquivo no R2.
+
 # Importação e exportação
 
 A exportação cria o mesmo pacote portátil da cópia, incluindo `_instrucao` e `arquivos[].conteudo`.
@@ -311,9 +320,10 @@ Assim, JSONs do Prompt Master anterior podem ser migrados.
 # Modo escuro
 
 - Na primeira abertura, o PWA respeita `prefers-color-scheme` do sistema.
-- O botão `◐` alterna o tema.
+- O botão `◐` alterna o tema e fica visível tanto na versão web quanto no PWA instalado (celular ou desktop) — antes ele era escondido por uma regra de CSS para telas estreitas (`max-width:850px`), o que fazia o botão sumir no mobile mesmo fora do modo instalado.
 - A escolha é salva em `localStorage` como `pm_theme`.
 - O tema funciona offline e não depende de CDN.
+- O `docs/sw.js` teve o nome do cache (`CACHE`) incrementado ao corrigir a UI; sempre que a interface mudar de forma visível, incremente o valor de `CACHE` para que instâncias do PWA já instaladas substituam os arquivos antigos (`index.html`, `styles.css`, `app.js`) assim que forem reabertas, em vez de continuar servindo a versão em cache indefinidamente.
 
 Para personalizar:
 
