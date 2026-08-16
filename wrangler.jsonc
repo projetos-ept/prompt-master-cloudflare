@@ -6,13 +6,13 @@
   "observability": { "enabled": true },
   "secrets": { "required": ["API_TOKEN"] },
   "vars": {
-    "ALLOWED_ORIGINS": "http://localhost:8080,https://SEU-USUARIO.github.io"
+          "ALLOWED_ORIGINS": "http://localhost:8080,https://projetos-ept.github.io"
   },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "prompt-master-db",
-      "database_id": "SUBSTITUA_PELO_ID_DO_D1",
+        "database_id": "d689b760-aab3-499c-a87b-dad36b3de7bd",
       "migrations_dir": "migrations"
     }
   ],
