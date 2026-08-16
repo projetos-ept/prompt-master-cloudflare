@@ -84,13 +84,16 @@ function visiblePrompts() {
   return items;
 }
 
-function cardHTML(prompt, pendingIds) {
+function cardHTML(prompt, pendingIds, pendingFiles = []) {
   const tags = (prompt.tags || []).slice(0, 3).map(tag => `<span class="tag">#${escapeHTML(tag)}</span>`).join('');
-  const attachments = (prompt.attachments || []).map(a => `<button type="button" class="attachment-chip" data-action="download-attachment" data-attachment="${a.id}" data-name="${escapeHTML(a.name)}" title="Baixar ${escapeHTML(a.name)}">📎 ${escapeHTML(a.name)}</button>`).join('');
+  const synced = (prompt.attachments || []).map(a => `<button type="button" class="attachment-chip" data-action="download-attachment" data-attachment="${a.id}" data-name="${escapeHTML(a.name)}" title="Baixar ${escapeHTML(a.name)}">📎 ${escapeHTML(a.name)}</button>`).join('');
+  const pending = pendingFiles.map(f => `<span class="attachment-chip pending" title="${escapeHTML(f.name)} · envio pendente">↻ ${escapeHTML(f.name)}</span>`).join('');
+  const attachments = synced + pending;
+  const totalCount = Number(prompt.attachmentCount || 0) + pendingFiles.length;
   return `<article class="prompt-card ${prompt.pinned ? 'pinned' : ''}" data-id="${prompt.id}">
     <div class="card-head"><span class="category-badge">${escapeHTML(prompt.category || 'Geral')}</span>
       <button class="favorite-button ${prompt.favorite ? 'active' : ''}" data-action="favorite" title="Favorito">${prompt.favorite ? '♥' : '♡'}</button></div>
-    <h2>${escapeHTML(prompt.title)}${prompt.attachmentCount ? `<small class="attachment-count" title="${prompt.attachmentCount} anexo(s)"> · 📎 ${prompt.attachmentCount}</small>` : ''}</h2><p class="prompt-preview">${escapeHTML(prompt.content)}</p>
+    <h2>${escapeHTML(prompt.title)}${totalCount ? `<small class="attachment-count" title="${totalCount} anexo(s)"> · 📎 ${totalCount}</small>` : ''}</h2><p class="prompt-preview">${escapeHTML(prompt.content)}</p>
     <div class="tag-list">${tags}</div>
     ${attachments ? `<div class="attachment-list">${attachments}</div>` : ''}
     <footer class="card-footer"><span class="card-date">Atualizado ${formatDate(prompt.updatedAt)}</span>
@@ -113,7 +116,10 @@ async function render() {
   $('#page-subtitle').textContent = `${items.length} ${items.length === 1 ? 'prompt encontrado' : 'prompts encontrados'}`;
   const pending = await localDB.all('outbox');
   const pendingIds = new Set(pending.map(o => o.promptId));
-  $('#prompt-grid').innerHTML = items.map(p => cardHTML(p, pendingIds)).join('');
+  const pendingFiles = await localDB.all('files');
+  const pendingFileMap = new Map();
+  pendingFiles.forEach(f => pendingFileMap.set(f.promptId, [...(pendingFileMap.get(f.promptId) || []), f]));
+  $('#prompt-grid').innerHTML = items.map(p => cardHTML(p, pendingIds, pendingFileMap.get(p.id) || [])).join('');
   $('#empty-state').hidden = items.length > 0;
   updateConnection(pending.length);
 }
@@ -177,14 +183,20 @@ async function pushOperation(operation) {
 async function syncFiles() {
   const files = await localDB.all('files');
   for (const item of files) {
-    const pendingPrompt = await localDB.get('outbox', `prompt:${item.promptId}`);
-    if (pendingPrompt) continue;
+    const prompt = await localDB.get('prompts', item.promptId);
+    if (!prompt || !prompt.version) continue; // O prompt ainda não existe no servidor.
     const form = new FormData(); form.append('attachmentId', item.id); form.append('file', item.blob, item.name);
     const response = await apiFetch(`/api/prompts/${encodeURIComponent(item.promptId)}/attachments`, { method: 'POST', body: form });
     if (response.ok) {
+      const payload = await response.json().catch(() => ({}));
       await localDB.delete('files', item.id);
-      const prompt = await localDB.get('prompts', item.promptId);
-      if (prompt) { prompt.attachmentCount = Number(prompt.attachmentCount || 0) + 1; await localDB.put('prompts', prompt); }
+      const attachmentId = payload.attachment?.id || item.id;
+      const attachmentName = payload.attachment?.name || item.name;
+      if (!(prompt.attachments || []).some(a => a.id === attachmentId)) {
+        prompt.attachmentCount = Number(prompt.attachmentCount || 0) + 1;
+        prompt.attachments = [...(prompt.attachments || []), { id: attachmentId, name: attachmentName }];
+        await localDB.put('prompts', prompt);
+      }
     }
   }
 }
@@ -230,6 +242,7 @@ async function syncNow() {
     state.syncing = false;
     $('#sync-button').classList.remove('spinning');
     await render();
+    if ($('#editor-dialog').open && $('#prompt-id').value) await loadEditorFiles($('#prompt-id').value);
   }
 }
 
@@ -272,13 +285,27 @@ async function saveEditor(close = false) {
 
 async function loadEditorFiles(promptId) {
   if (!promptId) return;
-  const localFiles = (await localDB.all('files')).filter(file => file.promptId === promptId);
+  let localFiles = (await localDB.all('files')).filter(file => file.promptId === promptId);
   let serverFiles = [];
   if (navigator.onLine && state.apiUrl && state.token) {
     try {
       const response = await apiFetch(`/api/prompts/${encodeURIComponent(promptId)}/attachments`);
       if (response.ok) serverFiles = (await response.json()).attachments || [];
     } catch { /* Os anexos pendentes continuam disponíveis localmente. */ }
+  }
+  // Um envio pode ter sido confirmado no servidor sem o dispositivo remover o registro local pendente; reconcilia aqui.
+  const serverIds = new Set(serverFiles.map(f => f.id));
+  const stale = localFiles.filter(f => serverIds.has(f.id));
+  if (stale.length) {
+    for (const f of stale) await localDB.delete('files', f.id);
+    localFiles = localFiles.filter(f => !serverIds.has(f.id));
+    const prompt = await localDB.get('prompts', promptId);
+    if (prompt) {
+      prompt.attachmentCount = serverFiles.length + localFiles.length;
+      prompt.attachments = serverFiles.map(f => ({ id: f.id, name: f.name }));
+      await localDB.put('prompts', prompt);
+      await loadLocal(); await render();
+    }
   }
   $('#file-list').innerHTML = [
     ...localFiles.map(f => `<span class="file-chip">↻ ${escapeHTML(f.name)} · envio pendente<button type="button" class="file-remove" data-remove-local="${f.id}" title="Remover anexo">×</button></span>`),

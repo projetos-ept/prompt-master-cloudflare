@@ -299,9 +299,12 @@ Para copiar anexos que já estão no R2, o dispositivo precisa estar conectado. 
 # Anexos no card e na edição
 
 - O card principal mostra cada anexo já sincronizado como um "chip" com o nome do arquivo, logo abaixo das tags. Clicar em um chip de anexo baixa **somente aquele arquivo** — não copia o prompt e não abre o editor.
+- Anexos ainda não sincronizados também aparecem no card, com um chip diferenciado ("↻ nome · envio pendente"), e contam no indicador `📎 N` do título — antes disso o card só mostrava algo depois que o arquivo já estivesse confirmado no servidor.
 - Na tela de edição, cada anexo (pendente de envio ou já salvo no servidor) tem um botão **×** ao lado para remoção rápida:
   - anexos ainda não sincronizados são removidos apenas do dispositivo (IndexedDB);
   - anexos já salvos no servidor são removidos via `DELETE /api/attachments/:id`, que apaga o registro no D1 e o arquivo no R2.
+- `syncFiles()` só adia o envio de um anexo quando o prompt em si ainda não existe no servidor (`version` zerada); um prompt já existente não fica mais bloqueado por edições pendentes não relacionadas. Ao concluir o upload, o status muda de "pendente" para "sincronizado" imediatamente — inclusive no editor já aberto, que é atualizado ao final de cada sincronização.
+- Caso um upload tenha sido confirmado no servidor sem o dispositivo remover o registro local (por exemplo, após uma falha de rede logo após a resposta), o editor reconcilia automaticamente ao abrir: qualquer anexo pendente que já exista no servidor é removido do IndexedDB e passa a aparecer apenas como sincronizado.
 
 # Importação e exportação
 

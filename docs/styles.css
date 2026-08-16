@@ -13,5 +13,5 @@
 @keyframes spin{to{transform:rotate(360deg)}}.spinning{animation:spin .8s linear infinite}
 .prompt-card .card-footer{display:grid;grid-template-columns:1fr;gap:6px}.prompt-card .card-actions{justify-content:flex-end;flex-wrap:wrap}
 .attachment-count{font-size:10px;color:var(--muted);font-weight:650;white-space:nowrap}
-.attachment-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.attachment-chip{font-size:10px;padding:5px 8px;border-radius:7px;background:var(--surface-2);border:0;color:var(--primary);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.attachment-chip:hover{background:var(--primary-soft)}
+.attachment-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.attachment-chip{font-size:10px;padding:5px 8px;border-radius:7px;background:var(--surface-2);border:0;color:var(--primary);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.attachment-chip:hover{background:var(--primary-soft)}.attachment-chip.pending{color:var(--muted);cursor:default}.attachment-chip.pending:hover{background:var(--surface-2)}
 .file-chip{display:inline-flex;align-items:center;gap:5px}.file-remove{border:0;background:transparent;color:var(--muted);font-size:13px;line-height:1;padding:0 2px;cursor:pointer;border-radius:4px}.file-remove:hover{color:var(--red);background:var(--surface)}
