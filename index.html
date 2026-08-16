@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#6d4aff">
+  <meta name="description" content="Acervo pessoal de prompts com uso offline e sincronização segura.">
+  <title>Prompt Master</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <script>
+    document.documentElement.dataset.theme = localStorage.getItem('pm_theme') ||
+      (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  </script>
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <div id="toast-region" class="toast-region" aria-live="polite"></div>
+
+  <section id="setup-screen" class="setup-screen" hidden>
+    <div class="setup-brand"><span class="brand-mark">P</span><strong>Prompt Master</strong></div>
+    <div class="setup-card">
+      <p class="eyebrow">SEU ACERVO, EM QUALQUER DISPOSITIVO</p>
+      <h1>Prompts organizados.<br><span>Sempre à mão.</span></h1>
+      <p class="setup-copy">Funciona offline e sincroniza automaticamente quando a conexão retorna.</p>
+      <form id="setup-form">
+        <label>Endereço da API
+          <input id="api-url" type="url" placeholder="https://prompt-master-api.seunome.workers.dev" required>
+        </label>
+        <label>Chave de acesso
+          <div class="password-wrap"><input id="api-token" type="password" autocomplete="current-password" required><button type="button" id="toggle-token" aria-label="Mostrar chave">◉</button></div>
+        </label>
+        <label class="check"><input id="remember-token" type="checkbox"> Lembrar a chave neste dispositivo</label>
+        <button class="button primary wide" type="submit">Conectar e sincronizar</button>
+        <p id="setup-error" class="form-error" hidden></p>
+      </form>
+      <button id="offline-entry" class="button ghost wide" type="button" hidden>Continuar com dados offline</button>
+    </div>
+  </section>
+
+  <div id="app-shell" class="app-shell" hidden>
+    <aside class="sidebar">
+      <a class="brand" href="#" aria-label="Prompt Master"><span class="brand-mark">P</span><span>Prompt Master</span></a>
+      <nav class="nav" aria-label="Filtros principais">
+        <button class="nav-item active" data-view="all"><span>▦</span> Todos <b id="count-all">0</b></button>
+        <button class="nav-item" data-view="favorites"><span>♥</span> Favoritos <b id="count-favorites">0</b></button>
+        <button class="nav-item" data-view="pinned"><span>◆</span> Fixados <b id="count-pinned">0</b></button>
+        <button class="nav-item" data-view="archived"><span>□</span> Arquivados <b id="count-archived">0</b></button>
+      </nav>
+      <div class="category-head"><span>CATEGORIAS</span><button id="add-category" title="Nova categoria">+</button></div>
+      <nav id="category-list" class="nav categories" aria-label="Categorias"></nav>
+      <div class="sidebar-footer">
+        <button id="install-button" class="install-button" hidden>＋ Instalar aplicativo</button>
+        <button id="settings-button" class="profile-button"><span class="avatar">LB</span><span><strong>Meu acervo</strong><small id="sync-caption">Preparando…</small></span><span>⋮</span></button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <button id="menu-button" class="icon-button mobile-only" aria-label="Abrir menu">☰</button>
+        <label class="search"><span>⌕</span><input id="search-input" type="search" placeholder="Buscar por título, texto ou tag…"><kbd>⌘ K</kbd></label>
+        <div class="top-actions">
+          <span id="connection-pill" class="connection-pill"><i></i><span>Offline</span></span>
+          <button id="sync-button" class="icon-button" title="Sincronizar agora">↻</button>
+          <button id="theme-button" class="icon-button" title="Alternar tema">◐</button>
+          <button id="new-button" class="button primary"><span>＋</span> Novo prompt</button>
+        </div>
+      </header>
+
+      <section class="content">
+        <div class="page-heading">
+          <div><p class="eyebrow">BIBLIOTECA PESSOAL</p><h1 id="page-title">Todos os prompts</h1><p id="page-subtitle">Carregando seu acervo…</p></div>
+          <div class="view-actions">
+            <select id="sort-select" aria-label="Ordenação"><option value="updated">Mais recentes</option><option value="title">Título A–Z</option><option value="category">Categoria</option></select>
+            <button id="import-button" class="icon-button" title="Importar JSON">⇧</button>
+            <button id="export-button" class="icon-button" title="Baixar JSON">⇩</button>
+          </div>
+        </div>
+        <div id="mobile-filters" class="mobile-filters"></div>
+        <section id="prompt-grid" class="prompt-grid" aria-live="polite"></section>
+        <div id="empty-state" class="empty-state" hidden><div>✦</div><h2>Nenhum prompt por aqui</h2><p>Crie um novo prompt ou ajuste os filtros da busca.</p><button class="button primary" data-action="new">Criar primeiro prompt</button></div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="editor-dialog" class="dialog editor-dialog">
+    <form id="editor-form" method="dialog">
+      <div class="dialog-head"><div><p class="eyebrow" id="editor-eyebrow">NOVO ITEM</p><h2 id="editor-title">Criar prompt</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="Fechar">×</button></div>
+      <input id="prompt-id" type="hidden">
+      <label>Título<input id="prompt-title" maxlength="200" placeholder="Ex.: Revisor de relatório técnico" required></label>
+      <div class="form-row">
+        <label>Categoria<input id="prompt-category" list="category-options" placeholder="Geral"></label>
+        <label>Tags<input id="prompt-tags" placeholder="revisão, escrita, técnico"></label>
+      </div>
+      <datalist id="category-options"></datalist>
+      <label>Conteúdo do prompt<textarea id="prompt-content" rows="12" placeholder="Escreva ou cole o prompt aqui…" required></textarea></label>
+      <label class="file-drop">＋ Adicionar anexos <small>até 5 MB por arquivo</small><input id="prompt-files" type="file" multiple hidden accept=".bash,.bat,.c,.cfg,.conf,.cpp,.cs,.css,.csv,.go,.h,.hpp,.htm,.html,.ini,.ipynb,.java,.js,.json,.jsx,.kt,.markdown,.md,.mjs,.pdf,.php,.ps1,.py,.rb,.rs,.sh,.sql,.swift,.toml,.ts,.tsx,.txt,.xml,.yaml,.yml,image/*"></label>
+      <div id="file-list" class="file-list"></div>
+      <div class="dialog-footer"><span id="editor-status" class="editor-status">As alterações ficam salvas neste dispositivo.</span><div><button class="button ghost" type="button" data-close-dialog>Cancelar</button><button id="save-button" class="button primary" type="submit" value="save">Salvar</button></div></div>
+    </form>
+  </dialog>
+
+  <dialog id="settings-dialog" class="dialog settings-dialog">
+    <form method="dialog">
+      <div class="dialog-head"><div><p class="eyebrow">CONFIGURAÇÕES</p><h2>Aplicativo e sincronização</h2></div><button class="icon-button" type="button" data-close-dialog>×</button></div>
+      <div class="setting-row"><span><strong>API conectada</strong><small id="settings-api"></small></span><button id="disconnect-button" type="button" class="button danger">Desconectar</button></div>
+      <div class="setting-row"><span><strong>Sincronização</strong><small id="pending-label">Nenhuma alteração pendente</small></span><button id="settings-sync" type="button" class="button">Sincronizar</button></div>
+      <div class="setting-row"><span><strong>Backup local</strong><small>Exporta inclusive alterações ainda não sincronizadas.</small></span><button id="settings-export" type="button" class="button">Baixar JSON</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="conflict-dialog" class="dialog conflict-dialog">
+    <form method="dialog"><div class="dialog-head"><div><p class="eyebrow">CONFLITO DE EDIÇÃO</p><h2>Este prompt mudou em outro dispositivo</h2></div></div><p>Escolha qual versão deve ser mantida. Nenhum conteúdo será descartado sem sua confirmação.</p><div id="conflict-comparison" class="conflict-comparison"></div><div class="dialog-footer"><button id="keep-server" class="button" value="server">Usar versão do servidor</button><button id="keep-local" class="button primary" value="local">Manter minha versão</button></div></form>
+  </dialog>
+
+  <input id="import-file" type="file" accept=".json,application/json" hidden>
+  <div id="sidebar-backdrop" class="sidebar-backdrop" hidden></div>
+</body>
+</html>

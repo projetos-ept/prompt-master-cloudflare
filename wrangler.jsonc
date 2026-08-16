@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "prompt-master-api",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-08-01",
+  "observability": { "enabled": true },
+  "secrets": { "required": ["API_TOKEN"] },
+  "vars": {
+    "ALLOWED_ORIGINS": "http://localhost:8080,https://SEU-USUARIO.github.io"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "prompt-master-db",
+      "database_id": "SUBSTITUA_PELO_ID_DO_D1",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "ATTACHMENTS",
+      "bucket_name": "prompt-master-anexos"
+    }
+  ]
+}

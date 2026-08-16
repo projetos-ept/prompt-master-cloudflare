@@ -1,0 +1,13 @@
+{
+  "name": "Prompt Master",
+  "short_name": "Prompts",
+  "description": "Acervo de prompts offline com sincronização automática.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f7fb",
+  "theme_color": "#6d4aff",
+  "icons": [
+    { "src": "./icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
